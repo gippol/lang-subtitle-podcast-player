@@ -251,13 +251,20 @@ class SubtitleStore {
     return hex(h >> 32) + hex(h);
   }
 
+  /// 元の曲のパスを書いておくファイルの拡張子 (曲が消えた時の掃除用)
+  static const _trackPathExt = '.path';
+
   File _manualFile(String trackPath, String ext) =>
       File(p.join(manualDir.path, '${keyFor(trackPath)}$ext'));
+
+  File _trackPathFile(String key) =>
+      File(p.join(manualDir.path, '$key$_trackPathExt'));
 
   Future<SubtitleLoad> load(String trackPath) async {
     for (final ext in subtitleExtensions) {
       final f = _manualFile(trackPath, ext);
       if (await f.exists()) {
+        await _recordTrackPath(trackPath); // 記録が無い古いコピーにも付けておく
         return _read(
           f,
           SubtitleSource.manual,
@@ -333,6 +340,7 @@ class SubtitleStore {
     await manualDir.create(recursive: true);
     await removeManual(trackPath);
     await _manualFile(trackPath, ext).writeAsBytes(bytes, flush: true);
+    await _recordTrackPath(trackPath);
     return null;
   }
 
@@ -341,5 +349,55 @@ class SubtitleStore {
       final f = _manualFile(trackPath, ext);
       if (await f.exists()) await f.delete();
     }
+    final record = _trackPathFile(keyFor(trackPath));
+    if (await record.exists()) await record.delete();
+  }
+
+  Future<void> _recordTrackPath(String trackPath) async {
+    final record = _trackPathFile(keyFor(trackPath));
+    try {
+      if (await record.exists() && await record.readAsString() == trackPath) {
+        return;
+      }
+      await record.writeAsString(trackPath, flush: true);
+    } on FileSystemException {
+      // 記録できなくても字幕は使える (掃除されないだけ)
+    }
+  }
+
+  /// 元の曲が削除・移動された字幕のコピーを消す。消した件数を返す。
+  ///
+  /// 曲のパスが記録されていないコピーは判断できないので残す。
+  /// ストレージが読めない状態 (権限なし等) で呼ぶと全て消えてしまうため、
+  /// 音声フォルダにアクセスできることを確認してから呼ぶこと。
+  Future<int> pruneOrphans() async {
+    if (!await manualDir.exists()) return 0;
+    final keys = <String>{};
+    await for (final e in manualDir.list(followLinks: false)) {
+      if (e is File) keys.add(p.basenameWithoutExtension(e.path));
+    }
+    var removed = 0;
+    for (final key in keys) {
+      final record = _trackPathFile(key);
+      final String trackPath;
+      try {
+        if (!await record.exists()) continue;
+        trackPath = await record.readAsString();
+        if (await File(trackPath).exists()) continue;
+      } on FileSystemException {
+        continue; // 確認できないものは残す
+      }
+      // 記録が壊れていて別の曲を指している場合は消さない
+      if (keyFor(trackPath) != key) continue;
+      for (final ext in subtitleExtensions) {
+        final f = File(p.join(manualDir.path, '$key$ext'));
+        if (await f.exists()) {
+          await f.delete();
+          removed++;
+        }
+      }
+      await record.delete();
+    }
+    return removed;
   }
 }

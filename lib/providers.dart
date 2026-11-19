@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:audio_service/audio_service.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -190,6 +192,18 @@ final subtitlesProvider = FutureProvider.autoDispose
     .family<SubtitleLoad, String>(
       (ref, trackPath) => ref.watch(subtitleStoreProvider).load(trackPath),
     );
+
+/// 起動時に、元の曲が削除・移動された字幕のコピーを掃除する。
+final subtitleCleanupProvider = FutureProvider<void>((ref) async {
+  // 音声フォルダを読めない状態だと全ての曲が「無い」と判定されてしまう
+  final ready = await ref.watch(rootReadyProvider.future);
+  if (!ready) return;
+  try {
+    await ref.read(subtitleStoreProvider).pruneOrphans();
+  } on FileSystemException {
+    // 掃除できなくても動作に支障はない。次回の起動で再挑戦する
+  }
+});
 
 class ShowSubtitlesNotifier extends Notifier<bool> {
   @override

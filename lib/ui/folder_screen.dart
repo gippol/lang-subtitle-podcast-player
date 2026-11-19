@@ -17,6 +17,7 @@ class RootScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // 前回の続きを読み込む (結果は使わないので watch するだけ)
     ref.watch(restoreSessionProvider);
+    ref.watch(subtitleCleanupProvider);
 
     final library = ref.watch(audioLibraryProvider);
     final permission = ref.watch(storagePermissionProvider);

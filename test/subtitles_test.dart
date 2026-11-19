@@ -185,6 +185,54 @@ void main() {
       );
     });
 
+    test('元の曲が無くなった手動の字幕だけを掃除する', () async {
+      final manual = Directory(p.join(tmp.path, 'manual'));
+      final store = SubtitleStore(manual);
+      final kept = p.join(tmp.path, 'kept.mp3');
+      final gone = p.join(tmp.path, 'gone.mp3');
+      await File(kept).writeAsString('');
+      await File(gone).writeAsString('');
+      final lrc = Uint8List.fromList(utf8.encode('[00:01.00]x'));
+      expect(await store.saveManual(kept, 'k.lrc', lrc), isNull);
+      final srt = Uint8List.fromList(
+        utf8.encode('1\n00:00:01,000 --> 00:00:02,000\nx\n'),
+      );
+      expect(await store.saveManual(gone, 'g.srt', srt), isNull);
+      // 曲のパスの記録が無い古いコピーは判断できないので残す
+      final legacy = File(p.join(manual.path, '0123456789abcdef.lrc'));
+      await legacy.writeAsBytes(lrc);
+
+      await File(gone).delete(); // 削除・移動された
+      expect(await store.pruneOrphans(), 1);
+
+      expect((await store.load(kept)).subtitles?.source, SubtitleSource.manual);
+      expect((await store.load(gone)).subtitles, isNull);
+      expect(await legacy.exists(), isTrue);
+      final names = manual.listSync().map((e) => p.basename(e.path)).toSet();
+      final goneKey = SubtitleStore.keyFor(gone);
+      expect(names.where((n) => n.startsWith(goneKey)), isEmpty);
+      expect(await store.pruneOrphans(), 0);
+    });
+
+    test('記録の無い古いコピーは読み込んだ時に曲のパスを記録する', () async {
+      final manual = Directory(p.join(tmp.path, 'manual'))..createSync();
+      final track = p.join(tmp.path, 'old.mp3');
+      await File(track).writeAsString('');
+      await File(p.join(manual.path, '${SubtitleStore.keyFor(track)}.lrc'))
+          .writeAsString('[00:01.00]x');
+      final store = SubtitleStore(manual);
+      expect((await store.load(track)).subtitles, isNotNull);
+
+      await File(track).delete();
+      expect(await store.pruneOrphans(), 1);
+      expect(manual.listSync(), isEmpty);
+    });
+
+    test('字幕フォルダが無ければ何もしない', () async {
+      final store = SubtitleStore(Directory(p.join(tmp.path, 'none')));
+      expect(await store.pruneOrphans(), 0);
+    });
+
     test('時刻の無い字幕ファイルはエラーとして返す', () async {
       final track = p.join(tmp.path, 't.mp3');
       await File(p.join(tmp.path, 't.lrc')).writeAsString('hello');
