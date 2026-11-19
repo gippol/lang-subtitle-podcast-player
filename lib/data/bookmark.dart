@@ -53,13 +53,39 @@ class AbBookmark {
 
 /// 区間リピートの回し方。
 class AbRepeatSettings {
-  const AbRepeatSettings({this.count = 0, this.gap = Duration.zero});
+  const AbRepeatSettings({
+    this.count = 0,
+    this.gap = Duration.zero,
+    this.gapMatchesSection = true,
+  });
 
   /// 区間を再生する回数。0 は無制限。
   final int count;
 
-  /// 1回ごとに入れる無音 (発話練習の時間)。
+  /// 1回ごとに入れる無音 (発話練習の時間)。[gapMatchesSection] なら使わない。
   final Duration gap;
+
+  /// 無音を区間と同じ長さにする (シャドーイング用。既定)
+  final bool gapMatchesSection;
+
+  AbRepeatSettings copyWith({
+    int? count,
+    Duration? gap,
+    bool? gapMatchesSection,
+  }) => AbRepeatSettings(
+    count: count ?? this.count,
+    gap: gap ?? this.gap,
+    gapMatchesSection: gapMatchesSection ?? this.gapMatchesSection,
+  );
+
+  /// 長さ [section] の区間を速度 [speed] で再生した後に入れる無音。
+  Duration gapAfter(Duration section, double speed) {
+    if (!gapMatchesSection) return gap;
+    if (section <= Duration.zero) return Duration.zero;
+    final s = speed.isFinite && speed > 0 ? speed : 1.0;
+    // 実際にかかった時間 (速度を上げていれば短く) と同じだけ待つ
+    return Duration(microseconds: (section.inMicroseconds / s).round());
+  }
 
   static const countOptions = [0, 2, 3, 5, 10];
   static const gapOptions = [

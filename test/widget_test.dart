@@ -117,6 +117,29 @@ void main() {
     });
   });
 
+  group('AbRepeatSettings.gapAfter', () {
+    const section = Duration(seconds: 4);
+
+    test('既定は区間と同じ長さ', () {
+      expect(const AbRepeatSettings().gapAfter(section, 1.0), section);
+    });
+
+    test('再生速度を変えていれば実際にかかった時間だけ待つ', () {
+      const s = AbRepeatSettings();
+      expect(s.gapAfter(section, 2.0), const Duration(seconds: 2));
+      expect(s.gapAfter(section, 0.5), const Duration(seconds: 8));
+      expect(s.gapAfter(section, double.nan), section);
+    });
+
+    test('秒数指定なら区間の長さに関係なくその秒数', () {
+      const s = AbRepeatSettings(
+        gap: Duration(seconds: 3),
+        gapMatchesSection: false,
+      );
+      expect(s.gapAfter(section, 2.0), const Duration(seconds: 3));
+    });
+  });
+
   group('区間の保存', () {
     setUp(() => SharedPreferences.setMockInitialValues({}));
 
@@ -154,7 +177,7 @@ void main() {
     test('繰り返し設定の既定値と範囲外の値の丸め', () async {
       final s = await SettingsStore.load();
       expect(s.abRepeat.count, 0);
-      expect(s.abRepeat.gap, Duration.zero);
+      expect(s.abRepeat.gapMatchesSection, isTrue);
 
       SharedPreferences.setMockInitialValues({
         'ab.count': -3,
@@ -163,6 +186,32 @@ void main() {
       final r = (await SettingsStore.load()).abRepeat;
       expect(r.count, 0);
       expect(r.gap, AbRepeatSettings.maxGap);
+      expect(r.gapMatchesSection, isFalse);
+    });
+
+    test('無音の設定 (区間と同じ / 秒数指定) を保存・読み込みできる', () async {
+      final s = await SettingsStore.load();
+      await s.setAbRepeat(
+        const AbRepeatSettings(
+          count: 3,
+          gap: Duration(seconds: 2),
+          gapMatchesSection: false,
+        ),
+      );
+      var r = s.abRepeat;
+      expect(
+        (r.count, r.gap, r.gapMatchesSection),
+        (3, const Duration(seconds: 2), false),
+      );
+
+      // 0秒も「区間と同じ」と区別して保存される
+      await s.setAbRepeat(r.copyWith(gap: Duration.zero));
+      expect(s.abRepeat.gapMatchesSection, isFalse);
+      expect(s.abRepeat.gap, Duration.zero);
+
+      await s.setAbRepeat(r.copyWith(gapMatchesSection: true));
+      r = s.abRepeat;
+      expect((r.count, r.gapMatchesSection), (3, true));
     });
   });
 }

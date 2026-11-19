@@ -132,24 +132,31 @@ class SettingsStore {
 
   // ---- 区間リピートの回し方 ----
 
+  /// [_kAbGap] にこの値が入っていれば「区間と同じ長さ」
+  static const _gapMatchesSection = -1;
+
   AbRepeatSettings get abRepeat {
     final count = (_prefs.getInt(_kAbCount) ?? 0).clamp(
       0,
       AbRepeatSettings.maxCount,
     );
-    final gapMs = (_prefs.getInt(_kAbGap) ?? 0).clamp(
-      0,
-      AbRepeatSettings.maxGap.inMilliseconds,
-    );
+    // 未設定なら「区間と同じ長さ」(シャドーイング向けの既定)
+    final rawGap = _prefs.getInt(_kAbGap) ?? _gapMatchesSection;
+    if (rawGap == _gapMatchesSection) return AbRepeatSettings(count: count);
+    final gapMs = rawGap.clamp(0, AbRepeatSettings.maxGap.inMilliseconds);
     return AbRepeatSettings(
       count: count,
       gap: Duration(milliseconds: gapMs),
+      gapMatchesSection: false,
     );
   }
 
   Future<void> setAbRepeat(AbRepeatSettings s) async {
     await _prefs.setInt(_kAbCount, s.count);
-    await _prefs.setInt(_kAbGap, s.gap.inMilliseconds);
+    await _prefs.setInt(
+      _kAbGap,
+      s.gapMatchesSection ? _gapMatchesSection : s.gap.inMilliseconds,
+    );
   }
 
   // ---- 保存した区間 ----

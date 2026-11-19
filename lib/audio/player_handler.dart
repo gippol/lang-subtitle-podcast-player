@@ -455,7 +455,7 @@ class PlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   /// A に戻る。無音が設定されていれば一時停止して待ってから再開する。
   void _loopBack(AbLoop ab) {
     _abSeeking = true;
-    final gap = abRepeat.value.gap;
+    final gap = abRepeat.value.gapAfter(ab.b! - ab.a!, _player.speed);
     if (gap <= Duration.zero) {
       abLoop.add(ab);
       _player.seek(ab.a).whenComplete(() => _abSeeking = false);

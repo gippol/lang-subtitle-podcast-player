@@ -18,9 +18,9 @@ String _repeatCountText(int count) => count == 0 ? '∞' : '$count回';
 
 String _gapText(Duration gap) => '${gap.inSeconds}秒';
 
-/// 繰り返し設定の短い表示 (例: "3回・2秒")
+/// 繰り返し設定の短い表示 (例: "3回・2秒", "∞・同じ長さ")
 String abRepeatText(AbRepeatSettings s) =>
-    '${_repeatCountText(s.count)}・${_gapText(s.gap)}';
+    '${_repeatCountText(s.count)}・${s.gapMatchesSection ? '同じ長さ' : _gapText(s.gap)}';
 
 /// 保存した区間を再生する。別の曲ならその曲のフォルダを読み込んでから。
 /// ファイルが見つからなければ false。
@@ -122,23 +122,36 @@ class _AbRepeatSheet extends ConsumerWidget {
                   text: _repeatCountText(c),
                   size: 52,
                   filled: c == current.count,
-                  onPressed: () => handler.setAbRepeat(
-                    AbRepeatSettings(count: c, gap: current.gap),
-                  ),
+                  onPressed: () =>
+                      handler.setAbRepeat(current.copyWith(count: c)),
                 ),
             ]),
             const SizedBox(height: 24),
-            section('間の無音', '1回ごとに一時停止して、声に出す時間を作ります', [
-              for (final g in AbRepeatSettings.gapOptions)
+            section(
+              '間の無音',
+              '1回ごとに一時停止して、声に出す時間を作ります\n'
+                  '「同じ」は区間を再生したのと同じ時間だけ待ちます (シャドーイング向け)',
+              [
                 RoundButton(
-                  text: _gapText(g),
+                  text: '同じ',
                   size: 52,
-                  filled: g == current.gap,
+                  tooltip: '区間と同じ長さ',
+                  filled: current.gapMatchesSection,
                   onPressed: () => handler.setAbRepeat(
-                    AbRepeatSettings(count: current.count, gap: g),
+                    current.copyWith(gapMatchesSection: true),
                   ),
                 ),
-            ]),
+                for (final g in AbRepeatSettings.gapOptions)
+                  RoundButton(
+                    text: _gapText(g),
+                    size: 52,
+                    filled: !current.gapMatchesSection && g == current.gap,
+                    onPressed: () => handler.setAbRepeat(
+                      current.copyWith(gap: g, gapMatchesSection: false),
+                    ),
+                  ),
+              ],
+            ),
           ],
         ),
       ),
